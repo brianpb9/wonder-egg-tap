@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#2b1d4a" />
+<title>Creature Kingdom: Hatch & Play</title>
+<style>
+  :root{
+    --gold:#FFD700; --sky:#00BFFF; --lime:#32CD32; --pink:#FF69B4; --orange:#FF4500;
+    --bg0:#3a2566; --bg1:#221540; --panel:rgba(20,12,40,.82);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;background:#120a24;font-family:'Baloo 2',system-ui,'Segoe UI',sans-serif;overflow:hidden}
+  #app{
+    position:relative;width:min(100vw,calc(100vh*9/16));height:min(100vh,calc(100vw*16/9));
+    margin:0 auto;left:50%;transform:translateX(-50%);
+    background:radial-gradient(120% 80% at 50% 0%,var(--bg0),var(--bg1) 70%);
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 60px rgba(0,0,0,.6)
+  }
+  /* HUD */
+  #hud{display:flex;gap:8px;padding:12px 12px 6px;z-index:5}
+  .chip{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    background:var(--panel);border:2px solid rgba(255,255,255,.10);border-radius:16px;
+    padding:8px 6px;color:#fff;font-weight:700;font-size:15px;backdrop-filter:blur(4px)}
+  .chip .ic{font-size:18px;line-height:1}
+  .chip b{font-variant-numeric:tabular-nums}
+  /* stage */
+  #stage{position:relative;flex:1;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  #hint{position:absolute;left:0;right:0;bottom:14px;text-align:center;color:#fff;
+    font-weight:700;font-size:16px;opacity:.85;text-shadow:0 2px 8px rgba(0,0,0,.5);
+    pointer-events:none;transition:opacity .4s}
+  /* bottom bar */
+  #bottom{display:flex;gap:8px;padding:8px 12px 14px;z-index:5}
+  .btn{flex:1;border:none;border-radius:16px;padding:12px;color:#231;font-weight:800;font-size:15px;
+    cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.25);transition:transform .06s,box-shadow .06s}
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+  .btn.power{background:linear-gradient(180deg,#ffe680,var(--gold))}
+  .btn.power:disabled{filter:grayscale(.6) opacity(.6);cursor:default}
+  .btn.coll{background:linear-gradient(180deg,#8be3ff,var(--sky));color:#053}
+  /* collection overlay */
+  #coll{position:absolute;inset:0;background:rgba(8,4,18,.92);z-index:20;display:none;
+    flex-direction:column;padding:16px;backdrop-filter:blur(6px)}
+  #coll.open{display:flex;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  #coll h2{color:#fff;text-align:center;margin-bottom:4px;font-size:22px}
+  #coll p{color:#cbb6ff;text-align:center;margin-bottom:12px;font-size:13px}
+  #grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding-bottom:8px}
+  .card{background:var(--panel);border:2px solid rgba(255,255,255,.08);border-radius:16px;
+    padding:8px 6px;text-align:center;color:#fff}
+  .card canvas{position:static;width:72px;height:72px;display:block;margin:0 auto}
+  .card .nm{font-size:12px;font-weight:700;margin-top:4px}
+  .card .ct{font-size:11px;color:var(--gold)}
+  .card.locked{filter:brightness(.4)}
+  .card.locked .nm{color:#9a8cc0}
+  #close{margin-top:10px}
+  .rarity-c{color:#cfd6e6}.rarity-r{color:var(--sky)}.rarity-co{color:var(--lime)}.rarity-l{color:var(--gold)}
+  /* toast */
+  #toast{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:30;
+    background:var(--panel);border:2px solid var(--gold);border-radius:14px;color:#fff;
+    padding:10px 16px;font-weight:800;opacity:0;transition:opacity .3s,top .3s;pointer-events:none;text-align:center}
+  #toast.show{opacity:1;top:14%}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="chip"><span class="ic">⚡</span><b id="uiEnergy">0</b></div>
+    <div class="chip"><span class="ic">🪙</span><b id="uiCoins">0</b></div>
+    <div class="chip"><span class="ic">🥚</span><b id="uiHatched">0</b></div>
+  </div>
+  <div id="stage"><canvas id="c"></canvas><div id="hint">Tap the egg to crack it!</div></div>
+  <div id="bottom">
+    <button class="btn power" id="btnPower">⚡ Power Up</button>
+    <button class="btn coll" id="btnColl">📖 Collection</button>
+  </div>
+
+  <div id="coll">
+    <h2>Creature Collection</h2>
+    <p id="collSub"></p>
+    <div id="grid"></div>
+    <button class="btn coll" id="close">Close</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Creature Kingdom: Hatch & Play  — single-file prototype
+   Built from GAME_BIBLE.md. No external files required:
+   creatures/eggs are drawn procedurally, but if a matching
+   PNG exists in ./assets/ it is used automatically.
+   ============================================================ */
+
+// ---- Content (from the bible's Catalog + Art Direction) ----
+let PAL = { gold:'#FFD700', sky:'#00BFFF', lime:'#32CD32', pink:'#FF69B4', orange:'#FF4500' };
+
+let CREATURES = [
+  { id:'pebblepup',    name:'Pebblepup',    rarity:'c',  color:'#b9c2d0', file:'pebblepup.png',    shape:'pup'   },
+  { id:'mossling',     name:'Mossling',     rarity:'c',  color:PAL.lime,  file:'mossling.png',     shape:'blob'  },
+  { id:'fluffernugget',name:'Fluffernugget',rarity:'r',  color:PAL.pink,  file:'fluffernugget.png',shape:'cat'   },
+  { id:'aquapod',      name:'Aquapod',      rarity:'r',  color:PAL.sky,   file:'aquapod.png',      shape:'drop'  },
+  { id:'sparkfin',     name:'Sparkfin',     rarity:'co', color:'#5ff0d0', file:'sparkfin.png',     shape:'fish'  },
+  { id:'draconis',     name:'Draconis',     rarity:'l',  color:PAL.orange,file:'draconis.png',     shape:'dragon'},
+];
+const RARITY = { c:{t:'Common',cls:'rarity-c'}, r:{t:'Rare',cls:'rarity-r'}, co:{t:'Co-op',cls:'rarity-co'}, l:{t:'Legendary',cls:'rarity-l'} };
+
+let EGGS = [
+  { id:'common',    file:'common_egg.png',    color:'#e8e2ff', accent:'#b9a9ff', weight:58, pool:['pebblepup','mossling'] },
+  { id:'rare',      file:'rare_egg.png',      color:'#bff0ff', accent:PAL.sky,   weight:26, pool:['fluffernugget','aquapod'] },
+  { id:'co_op',     file:'co_op_egg.png',     color:'#d6ffe6', accent:PAL.lime,  weight:11, pool:['sparkfin'] },
+  { id:'legendary', file:'legendary_egg.png', color:'#ffe9b0', accent:PAL.gold,  weight:5,  pool:['draconis'] },
+];
+
+// ---- Save / state ----
+const SAVE_KEY = 'creaturekingdom.v1';
+const def = () => ({ energy:0, coins:0, hatched:0, tapPower:1, powerLvl:0, collection:{} });
+let S = load();
+function load(){ try{ return Object.assign(def(), JSON.parse(localStorage.getItem(SAVE_KEY))||{}); }catch(e){ return def(); } }
+let saveT=0;
+function save(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }, 120); }
+
+// ---- Optional asset loading (vector fallback if missing) ----
+const IMG = {};
+function tryLoad(file){
+  const im = new Image(); im.onload=()=>{ IMG[file]={img:im,ok:true}; }; im.onerror=()=>{ IMG[file]={ok:false}; };
+  im.src = 'assets/'+file; IMG[file]={ok:false,loading:true};
+}
+function loadAssets(){ [...EGGS,...CREATURES].forEach(o=>{ if(o.file) tryLoad(o.file); }); }
+
+// ---- Canvas ----
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  const r = document.getElementById('stage').getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W=r.width; H=r.height; cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+
+// ---- Audio (WebAudio blips; lazy init on first tap) ----
+let AC=null;
+function beep(freq, dur=0.08, type='sine', vol=0.15){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.value=freq; o.connect(g); g.connect(AC.destination);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+dur);
+  o.start(); o.stop(AC.currentTime+dur);
+}
+function chime(){ if(!AC) return; [523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.18,'triangle',0.18),i*70)); }
+
+// ---- Game objects ----
+let egg = null;            // {type, taps, needed, crackStage}
+let particles = [];
+let floaters = [];
+let shake = 0;
+let eggScale = 1, eggScaleV = 0;
+let combo = 0, comboTimer = 0;
+let reveal = null;         // {creature, t} during hatch animation
+const REVEAL_TIME = 1.6;
+
+function weightedEgg(){
+  const tot = EGGS.reduce((a,e)=>a+e.weight,0); let r=Math.random()*tot;
+  for(const e of EGGS){ if((r-=e.weight)<=0) return e; } return EGGS[0];
+}
+function spawnEgg(){
+  const type = weightedEgg();
+  const needed = {common:12, rare:16, co_op:20, legendary:26}[type.id] || 12;
+  egg = { type, taps:0, needed, crackStage:0 };
+}
+function crackStageOf(e){ return Math.min(3, Math.floor((e.taps/e.needed)*3)); }
+
+function eggCenter(){ return { x:W/2, y:H*0.46, r:Math.min(W,H)*0.20 }; }
+
+// ---- Input ----
+function onTap(px,py){
+  if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(reveal) return;                 // ignore taps mid-hatch
+  const c = eggCenter();
+  const dx=px-c.x, dy=py-c.y, inside = dx*dx+dy*dy <= (c.r*1.25)*(c.r*1.25);
+
+  // combo
+  combo = comboTimer>0 ? Math.min(combo+1, 30) : 1; comboTimer = 0.45;
+  const mult = 1 + Math.min(combo,20)*0.08;        // up to ~2.6x
+  const gain = Math.max(1, Math.round(S.tapPower*mult));
+
+  S.energy += gain; floaters.push({x:px,y:py,vy:-40,life:0.9,txt:'+'+gain});
+  burst(px,py, inside?10:5, egg.type.accent);
+  beep(420 + Math.min(combo,18)*28, 0.06, 'square', 0.10);
+
+  if(inside){
+    egg.taps += S.tapPower;
+    eggScale = 0.82; eggScaleV = 0;                // squash
+    const st = crackStageOf(egg);
+    if(st>egg.crackStage){ egg.crackStage=st; shake=Math.min(shake+7,14); burst(c.x,c.y,18,'#fff'); beep(180,0.12,'sawtooth',0.14); }
+    if(egg.taps>=egg.needed){ hatch(); }
+  }
+  hideHint(); render.dirty=true; save();
+}
+function burst(x,y,n,color){
+  for(let i=0;i<n;i++){ const a=Math.random()*Math.PI*2, sp=40+Math.random()*180;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-40,life:0.5+Math.random()*0.5,color,r:2+Math.random()*3}); }
+}
+
+function hatch(){
+  const pool = egg.type.pool;
+  const cr = CREATURES.find(c=>c.id===pool[Math.floor(Math.random()*pool.length)]);
+  const first = !S.collection[cr.id];
+  S.collection[cr.id] = (S.collection[cr.id]||0)+1;
+  S.hatched++;
+  const reward = {common:8, rare:18, co_op:30, legendary:60}[egg.type.id]||8;
+  S.coins += reward;
+  reveal = { creature:cr, t:0, reward, first };
+  shake=16; const c=eggCenter(); burst(c.x,c.y,40,egg.type.accent); chime();
+  toast((first?'NEW! ':'')+cr.name+'  +'+reward+'🪙', RARITY[cr.rarity].t);
+  save();
+}
+
+// ---- UI ----
+function powerCost(){ return 25 + S.powerLvl*S.powerLvl*15; }
+function syncHUD(){
+  document.getElementById('uiEnergy').textContent = fmt(S.energy);
+  document.getElementById('uiCoins').textContent  = fmt(S.coins);
+  document.getElementById('uiHatched').textContent= fmt(S.hatched);
+  const pb=document.getElementById('btnPower'), cost=powerCost();
+  pb.textContent = '⚡ Power Up ('+cost+')';
+  pb.disabled = S.energy < cost;
+}
+function fmt(n){ return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':''+n; }
+let hintHidden=false;
+function hideHint(){ if(!hintHidden){ hintHidden=true; document.getElementById('hint').style.opacity=0; } }
+
+let toastT=0;
+function toast(main, sub){
+  const t=document.getElementById('toast'); t.innerHTML = main + (sub?'<br><small style="opacity:.8;font-size:12px">'+sub+'</small>':'');
+  t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600);
+}
+
+document.getElementById('btnPower').onclick=()=>{
+  const cost=powerCost(); if(S.energy<cost) return;
+  S.energy-=cost; S.powerLvl++; S.tapPower=1+S.powerLvl; toast('Tap Power → '+S.tapPower,'+1 per tap');
+  beep(660,0.12,'triangle',0.16); syncHUD(); save();
+};
+document.getElementById('btnColl').onclick=openColl;
+document.getElementById('close').onclick=()=>document.getElementById('coll').classList.remove('open');
+
+function openColl(){
+  const grid=document.getElementById('grid'); grid.innerHTML='';
+  const owned=CREATURES.filter(c=>S.collection[c.id]).length;
+  document.getElementById('collSub').textContent = owned+' / '+CREATURES.length+' discovered';
+  CREATURES.forEach(cr=>{
+    const has=S.collection[cr.id]; const card=document.createElement('div');
+    card.className='card'+(has?'':' locked');
+    const mini=document.createElement('canvas'); mini.width=144; mini.height=144;
+    drawCreature(mini.getContext('2d'),72,72,52,cr,has?1:0,!!has);
+    card.appendChild(mini);
+    const nm=document.createElement('div'); nm.className='nm'; nm.textContent=has?cr.name:'???'; card.appendChild(nm);
+    const ct=document.createElement('div'); ct.className='ct '+RARITY[cr.rarity].cls;
+    ct.textContent=has?(RARITY[cr.rarity].t+' ×'+S.collection[cr.id]):RARITY[cr.rarity].t; card.appendChild(ct);
+    grid.appendChild(card);
+  });
+  document.getElementById('coll').classList.add('open');
+}
+
+// ---- Drawing ----
+function drawEgg(g, x, y, r, e){
+  const im=IMG[e.type.file];
+  if(im&&im.ok){ const s=r*2.2; g.drawImage(im.img, x-s/2, y-s/2, s, s); }
+  else {
+    g.save(); g.translate(x,y);
+    g.beginPath(); g.ellipse(0,0,r*0.82,r,0,0,Math.PI*2);
+    const grad=g.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#fff'); grad.addColorStop(.4,e.type.color); grad.addColorStop(1,e.type.accent);
+    g.fillStyle=grad; g.fill();
+    g.lineWidth=2; g.strokeStyle='rgba(255,255,255,.5)'; g.beginPath(); g.ellipse(-r*0.25,-r*0.35,r*0.18,r*0.30,0.5,0,Math.PI*2); g.stroke();
+    // spots
+    g.fillStyle='rgba(255,255,255,.35)';
+    for(let i=0;i<5;i++){ g.beginPath(); g.arc(Math.sin(i*1.7)*r*0.4, Math.cos(i*2.1)*r*0.5, r*0.07,0,Math.PI*2); g.fill(); }
+    g.restore();
+  }
+  // crack overlay
+  if(e.crackStage>0){
+    g.save(); g.translate(x,y); g.strokeStyle='rgba(40,20,60,.85)'; g.lineWidth=3; g.lineCap='round';
+    const segs=[[0,-r,-r*0.18,-r*0.3],[-r*0.18,-r*0.3,r*0.12,-r*0.05],[r*0.12,-r*0.05,-r*0.1,r*0.25],[-r*0.1,r*0.25,r*0.15,r*0.55]];
+    for(let i=0;i<e.crackStage+1 && i<segs.length;i++){ const s=segs[i]; g.beginPath(); g.moveTo(s[0],s[1]); g.lineTo(s[2],s[3]); g.stroke(); }
+    g.restore();
+  }
+}
+
+function drawCreature(g,x,y,r,cr,pop,full){
+  const im=IMG[cr.file];
+  if(im&&im.ok){ const s=r*2*(0.7+0.3*pop); g.drawImage(im.img, x-s/2, y-s/2, s, s); return; }
+  g.save(); g.translate(x,y); g.scale(0.7+0.3*pop, 0.7+0.3*pop);
+  const col=full?cr.color:'#3a2f55';
+  // body
+  g.fillStyle=col; g.beginPath(); g.arc(0,r*0.1,r*0.7,0,Math.PI*2); g.fill();
+  // shape-specific bits
+  g.fillStyle=col;
+  if(cr.shape==='cat'){ tri(g,-r*0.5,-r*0.45,-r*0.2,-r*0.9,-r*0.05,-r*0.4); tri(g,r*0.5,-r*0.45,r*0.2,-r*0.9,r*0.05,-r*0.4); }
+  if(cr.shape==='dragon'){ tri(g,-r*0.45,-r*0.4,-r*0.6,-r*0.95,-r*0.15,-r*0.55); tri(g,r*0.45,-r*0.4,r*0.6,-r*0.95,r*0.15,-r*0.55);
+    g.fillStyle='rgba(255,255,255,.5)'; tri(g,r*0.6,r*0.1,r*1.0,-r*0.1,r*0.7,r*0.45); }
+  if(cr.shape==='drop'){ g.beginPath(); g.moveTo(0,-r*0.9); g.quadraticCurveTo(r*0.7,-r*0.1,0,r*0.1); g.quadraticCurveTo(-r*0.7,-r*0.1,0,-r*0.9); g.fill(); }
+  if(cr.shape==='fish'){ tri(g,-r*0.6,r*0.1,-r*1.0,-r*0.2,-r*1.0,r*0.45); }
+  if(cr.shape==='pup'){ g.beginPath(); g.arc(-r*0.45,-r*0.3,r*0.22,0,Math.PI*2); g.arc(r*0.45,-r*0.3,r*0.22,0,Math.PI*2); g.fill(); }
+  // belly
+  g.fillStyle='rgba(255,255,255,.35)'; g.beginPath(); g.arc(0,r*0.25,r*0.4,0,Math.PI*2); g.fill();
+  // eyes
+  if(full){
+    g.fillStyle='#fff'; g.beginPath(); g.arc(-r*0.22,0,r*0.16,0,Math.PI*2); g.arc(r*0.22,0,r*0.16,0,Math.PI*2); g.fill();
+    g.fillStyle='#201433'; g.beginPath(); g.arc(-r*0.20,r*0.02,r*0.08,0,Math.PI*2); g.arc(r*0.24,r*0.02,r*0.08,0,Math.PI*2); g.fill();
+    g.strokeStyle='rgba(255,120,170,.8)'; g.lineWidth=2; g.beginPath(); g.arc(-r*0.4,r*0.25,r*0.1,0,Math.PI); g.arc(r*0.4,r*0.25,r*0.1,0,Math.PI); g.stroke();
+  } else { g.fillStyle='#9a8cc0'; g.font='bold '+(r*0.9)+'px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('?',0,r*0.1); }
+  g.restore();
+}
+function tri(g,ax,ay,bx,by,cx,cy){ g.beginPath(); g.moveTo(ax,ay); g.lineTo(bx,by); g.lineTo(cx,cy); g.closePath(); g.fill(); }
+
+// ---- Main loop ----
+let last=performance.now();
+const render={dirty:true};
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  // physics
+  comboTimer-=dt; if(comboTimer<=0) combo=0;
+  eggScaleV += (1-eggScale)*60*dt; eggScaleV*=0.82; eggScale+=eggScaleV*dt; // springy
+  shake*=Math.pow(0.001,dt);
+  particles.forEach(p=>{ p.vy+=300*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt; });
+  particles=particles.filter(p=>p.life>0);
+  floaters.forEach(f=>{ f.y+=f.vy*dt; f.life-=dt; }); floaters=floaters.filter(f=>f.life>0);
+  if(reveal){ reveal.t+=dt; if(reveal.t>=REVEAL_TIME){ reveal=null; spawnEgg(); } }
+
+  // draw
+  ctx.clearRect(0,0,W,H);
+  const sx=(Math.random()-0.5)*shake, sy=(Math.random()-0.5)*shake;
+  ctx.save(); ctx.translate(sx,sy);
+
+  // soft ground glow
+  const c=eggCenter();
+  const halo=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,c.r*2.4);
+  halo.addColorStop(0, hexA(egg?egg.type.accent:'#fff',0.28)); halo.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=halo; ctx.fillRect(0,0,W,H);
+
+  if(reveal){
+    const p=Math.min(1,reveal.t/0.5);
+    drawCreature(ctx, c.x, c.y, c.r*1.1, reveal.creature, p, true);
+  } else if(egg){
+    ctx.save(); ctx.translate(c.x,c.y); ctx.scale(1/Math.max(0.3,eggScale)*0.9+0.1, eggScale); ctx.translate(-c.x,-c.y);
+    drawEgg(ctx, c.x, c.y, c.r, egg); ctx.restore();
+    // progress ring
+    const pr=egg.taps/egg.needed; ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.arc(c.x,c.y+c.r*1.35, c.r*0.5, 0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle=egg.type.accent; ctx.beginPath(); ctx.arc(c.x,c.y+c.r*1.35,c.r*0.5,-Math.PI/2,-Math.PI/2+pr*Math.PI*2); ctx.stroke();
+  }
+
+  particles.forEach(p=>{ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); });
+  ctx.globalAlpha=1;
+  floaters.forEach(f=>{ ctx.globalAlpha=Math.max(0,f.life); ctx.fillStyle='#fff'; ctx.font='bold 18px system-ui'; ctx.textAlign='center';
+    ctx.fillText(f.txt,f.x,f.y); }); ctx.globalAlpha=1;
+
+  if(combo>2 && !reveal){ ctx.fillStyle=PAL.gold; ctx.font='bold 22px system-ui'; ctx.textAlign='center';
+    ctx.fillText('Combo x'+combo+'!', c.x, H*0.16); }
+
+  ctx.restore();
+  syncHUD();
+  requestAnimationFrame(frame);
+}
+function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+
+// ---- Pointer ----
+cv.addEventListener('pointerdown', e=>{ const r=cv.getBoundingClientRect(); onTap(e.clientX-r.left, e.clientY-r.top); });
+
+// ---- Content pack (content.json overrides defaults; auto-deployed by n8n) ----
+function normCreature(c){
+  return { id:String(c.id||'creature'), name:c.name||'Creature', rarity:(RARITY[c.rarity]?c.rarity:'c'),
+           color:c.color||'#b9c2d0', shape:c.shape||'blob', file:c.file||(String(c.id||'creature')+'.png') };
+}
+function normEgg(e,i){
+  const ids=CREATURES.map(c=>c.id);
+  let pool=Array.isArray(e.pool)?e.pool.filter(p=>ids.includes(p)):[];
+  if(!pool.length) pool=[ids[i%ids.length]||ids[0]];
+  return { id:String(e.id||('egg'+i)), color:e.color||'#e8e2ff', accent:e.accent||'#b9a9ff',
+           weight:Number(e.weight)||10, pool, file:e.file||(String(e.id||'egg')+'_egg.png') };
+}
+function applyContent(d){
+  if(!d||typeof d!=='object') return;
+  if(d.title) document.title=d.title;
+  if(d.palette&&typeof d.palette==='object') PAL=Object.assign({},PAL,d.palette);
+  if(Array.isArray(d.creatures)&&d.creatures.length) CREATURES=d.creatures.map(normCreature);
+  if(Array.isArray(d.eggs)&&d.eggs.length) EGGS=d.eggs.map(normEgg);
+}
+async function boot(){
+  // ?game=<slug> loads that game's own folder; otherwise the default root content.json
+  const g = new URLSearchParams(location.search).get('game');
+  const url = g ? ('games/'+encodeURIComponent(g)+'/content.json') : 'content.json';
+  try{ let r=await fetch(url,{cache:'no-store'}); if(!r.ok && g){ r=await fetch('content.json',{cache:'no-store'}); }
+       if(r.ok) applyContent(await r.json()); }catch(e){}
+  loadAssets(); resize(); spawnEgg(); syncHUD(); requestAnimationFrame(frame);
+}
+boot();
+</script>
+</body>
+</html>

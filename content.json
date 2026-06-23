@@ -1,0 +1,18 @@
+{
+  "title": "Creature Kingdom: Hatch & Play",
+  "palette": { "gold": "#FFD700", "sky": "#00BFFF", "lime": "#32CD32", "pink": "#FF69B4", "orange": "#FF4500" },
+  "creatures": [
+    { "id": "pebblepup",     "name": "Pebblepup",     "rarity": "c",  "color": "#b9c2d0", "shape": "pup"    },
+    { "id": "mossling",      "name": "Mossling",      "rarity": "c",  "color": "#32CD32", "shape": "blob"   },
+    { "id": "fluffernugget", "name": "Fluffernugget", "rarity": "r",  "color": "#FF69B4", "shape": "cat"    },
+    { "id": "aquapod",       "name": "Aquapod",       "rarity": "r",  "color": "#00BFFF", "shape": "drop"   },
+    { "id": "sparkfin",      "name": "Sparkfin",      "rarity": "co", "color": "#5ff0d0", "shape": "fish"   },
+    { "id": "draconis",      "name": "Draconis",      "rarity": "l",  "color": "#FF4500", "shape": "dragon" }
+  ],
+  "eggs": [
+    { "id": "common",    "color": "#e8e2ff", "accent": "#b9a9ff", "weight": 58, "pool": ["pebblepup", "mossling"] },
+    { "id": "rare",      "color": "#bff0ff", "accent": "#00BFFF", "weight": 26, "pool": ["fluffernugget", "aquapod"] },
+    { "id": "co_op",     "color": "#d6ffe6", "accent": "#32CD32", "weight": 11, "pool": ["sparkfin"] },
+    { "id": "legendary", "color": "#ffe9b0", "accent": "#FFD700", "weight": 5,  "pool": ["draconis"] }
+  ]
+}
