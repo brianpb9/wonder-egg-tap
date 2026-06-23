@@ -1,0 +1,87 @@
+{
+  "title": "Shape Safari",
+  "palette": {
+    "gold": "#FFDD44",
+    "sky": "#AEEEEE",
+    "lime": "#77DD77",
+    "pink": "#FF6347",
+    "orange": "#D2691E"
+  },
+  "creatures": [
+    {
+      "id": "lion",
+      "name": "Lion",
+      "rarity": "c",
+      "color": "#D2691E",
+      "shape": "cat"
+    },
+    {
+      "id": "elephant",
+      "name": "Elephant",
+      "rarity": "r",
+      "color": "#AEEEEE",
+      "shape": "blob"
+    },
+    {
+      "id": "giraffe",
+      "name": "Giraffe",
+      "rarity": "r",
+      "color": "#FFDD44",
+      "shape": "pup"
+    },
+    {
+      "id": "monkey",
+      "name": "Monkey",
+      "rarity": "co",
+      "color": "#FF6347",
+      "shape": "pup"
+    },
+    {
+      "id": "zebra",
+      "name": "Zebra",
+      "rarity": "l",
+      "color": "#77DD77",
+      "shape": "cat"
+    }
+  ],
+  "eggs": [
+    {
+      "id": "safari_basic",
+      "color": "#D2691E",
+      "accent": "#FFDD44",
+      "weight": 50,
+      "pool": [
+        "lion",
+        "elephant"
+      ]
+    },
+    {
+      "id": "safari_rare",
+      "color": "#AEEEEE",
+      "accent": "#FF6347",
+      "weight": 30,
+      "pool": [
+        "elephant",
+        "giraffe"
+      ]
+    },
+    {
+      "id": "safari_coop",
+      "color": "#FF6347",
+      "accent": "#77DD77",
+      "weight": 15,
+      "pool": [
+        "monkey"
+      ]
+    },
+    {
+      "id": "safari_legendary",
+      "color": "#77DD77",
+      "accent": "#AEEEEE",
+      "weight": 5,
+      "pool": [
+        "zebra"
+      ]
+    }
+  ]
+}
